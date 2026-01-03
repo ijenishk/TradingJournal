@@ -1,23 +1,22 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import os
 
 # Mobile-friendly layout
 st.set_page_config(page_title="AlphaLog Mobile", layout="centered")
 
-# --- DATABASE SETUP (Local for now, see Step 2 for permanent) ---
-# We will use a CSV file to store trades so it's easier to manage on GitHub
+# File-based database
 DATA_FILE = "trades.csv"
 
 def load_data():
-    try:
+    if os.path.exists(DATA_FILE):
         return pd.read_csv(DATA_FILE)
-    except FileNotFoundError:
-        return pd.DataFrame(columns=[
-            "Ticker", "Leverage", "Account", "Direction", 
-            "Entry", "Exit", "TP1", "TP2", "SL", 
-            "Status", "PnL", "Why", "Date"
-        ])
+    return pd.DataFrame(columns=[
+        "Ticker", "Leverage", "Account", "Direction", 
+        "Entry", "Exit", "TP1", "TP2", "SL", 
+        "Status", "PnL", "Why", "Date"
+    ])
 
 st.title("📱 AlphaLog Mobile")
 
@@ -48,11 +47,9 @@ with st.expander("📝 Log New Trade", expanded=True):
 
         if submit:
             if ticker:
-                # Calculation
                 pnl = (ex - en) if direction == "Long" else (en - ex)
                 
-                # Create row
-                new_data = {
+                new_row = {
                     "Ticker": ticker, "Leverage": leverage, "Account": acc_type,
                     "Direction": direction, "Entry": en, "Exit": ex,
                     "TP1": tp1_val, "TP2": tp2_val, "SL": sl_val,
@@ -60,21 +57,17 @@ with st.expander("📝 Log New Trade", expanded=True):
                     "Date": datetime.now().strftime("%Y-%m-%d %H:%M")
                 }
                 
-                # Append and Save
                 df = load_data()
-                df = pd.concat([df, pd.DataFrame([new_data])], ignore_index=True)
+                df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
                 df.to_csv(DATA_FILE, index=False)
                 st.success("Trade Logged!")
-            else:
-                st.error("Please enter a Ticker")
+                st.rerun() # Refresh to show new data
 
 # --- VIEW HISTORY ---
 st.markdown("---")
 df_display = load_data()
 if not df_display.empty:
     st.metric("Total PnL", f"${df_display['PnL'].sum():,.2f}")
-    st.subheader("Recent History")
+    st.subheader("History")
     # Show key info only for mobile view
     st.dataframe(df_display[['Ticker', 'Direction', 'PnL', 'Status']].tail(10), use_container_width=True)
-else:
-    st.info("No trades logged yet.")
