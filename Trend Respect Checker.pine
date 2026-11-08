@@ -1,0 +1,53 @@
+/@version=6
+indicator("Master Trend & Rolling VWAP v6 - Styled", overlay = true, max_lines_count = 100, max_labels_count = 100)
+
+// ==========================================
+// --- SECTION 1: EMA CLOUDS (TREND) ---
+// ==========================================
+grp_style = 'Cloud Color & Transparency'
+bull_col   = input.color(#00ff08, "Bullish Trend Color", group=grp_style)
+bear_col   = input.color(#ff0000, "Bearish Trend Color", group=grp_style)
+cloud_trans = input.int(90, "Cloud Transparency (0-100)", minval=0, maxval=100, group=grp_style)
+
+grp1 = 'Basic Trend (Current TF)'
+show_ema_basic = input.bool(true, "Show Basic EMAs", group=grp1)
+ema1_len = input.int(13, 'EMA 1 Length', group = grp1)
+ema2_len = input.int(21, 'EMA 2 Length', group = grp1)
+ema3_len = input.int(34, 'EMA 3 Length', group = grp1)
+src = input.source(close, 'EMA Source', group = grp1)
+
+// --- DYNAMIC COLOR LOGIC ---
+ema1 = ta.ema(src, ema1_len)
+ema2 = ta.ema(src, ema2_len)
+ema3 = ta.ema(src, ema3_len)
+
+upper_cloud = math.max(ema1, ema3)
+lower_cloud = math.min(ema1, ema3)
+
+three_above = close > upper_cloud and close[1] > upper_cloud[1] and close[2] > upper_cloud[2]
+three_below = close < lower_cloud and close[1] < lower_cloud[1] and close[2] < lower_cloud[2]
+
+var color trend_color = color.gray
+if three_above
+    trend_color := bull_col
+else if three_below
+    trend_color := bear_col
+
+// EMA Plotting
+p1 = plot(show_ema_basic ? ema1 : na, color = trend_color, linewidth = 2, title = 'EMA 13')
+p2 = plot(show_ema_basic ? ema2 : na, color = color.new(trend_color, 40), linewidth = 1, title = 'EMA 21')
+p3 = plot(show_ema_basic ? ema3 : na, color = color.new(trend_color, 40), linewidth = 2, title = 'EMA 34')
+fill(p1, p3, color = color.new(trend_color, cloud_trans), title = 'Basic Cloud')
+
+// --- H4 & Daily Trends ---
+grp2 = 'Daily Trend (H4)'
+show_ema_h4 = input.bool(true, "Show H4 EMAs", group=grp2)
+h4_col = input.color(color.orange, "H4 Cloud Color", group=grp2)
+emaH4_1 = request.security(syminfo.tickerid, '240', ta.ema(src, 100), gaps = barmerge.gaps_on)
+emaH4_2 = request.security(syminfo.tickerid, '240', ta.ema(src, 200), gaps = barmerge.gaps_on)
+
+ph1 = plot(show_ema_h4 ? emaH4_1 : na, color = h4_col, linewidth = 2, title = 'H4 EMA 100')
+ph2 = plot(show_ema_h4 ? emaH4_2 : na, color = color.new(h4_col, 50), linewidth = 2, title = 'H4 EMA 200')
+fill(ph1, ph2, color = color.new(h4_col, cloud_trans), title = 'H4 Cloud')
+
+
