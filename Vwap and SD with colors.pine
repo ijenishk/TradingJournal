@@ -1,0 +1,207 @@
+//@version=5
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © TJ_667
+
+// Volume Weighted Average Price for multiple periods with Standard Deviation band selection - Daily, Weekly, Monthly, Quarterly, Yearly 
+
+
+indicator(" VWAP D/W/M/Q/Y ", overlay = true)
+
+// ---------- Functions ---------- //
+
+// TradingView vwap function. Taken out stdev calcs to put in seperate function. 
+computeVWAP(src, isNewPeriod) =>
+	var float sumSrcVol = na
+	var float sumVol = na
+    var float sumSrcSrcVol = na
+
+	sumSrcVol := isNewPeriod ? src * volume : src * volume + sumSrcVol[1]
+	sumVol := isNewPeriod ? volume : volume + sumVol[1]
+	// sumSrcSrcVol calculates the dividend of the equation that is later used to calculate the standard deviation
+	sumSrcSrcVol := isNewPeriod ? volume * math.pow(src, 2) : volume * math.pow(src, 2) + sumSrcSrcVol[1]
+
+	_vwap = sumSrcVol / sumVol
+	variance = sumSrcSrcVol / sumVol - math.pow(_vwap, 2)
+	variance := variance < 0 ? 0 : variance
+	stDev = math.sqrt(variance)
+
+	[_vwap, stDev]
+
+// Standard Deviation Band calculation function
+compute_stDEV(_vwap, stDev, stDevMultiplier_1, stDevMultiplier_2) =>
+
+    upperBand_2 = _vwap + stDev * stDevMultiplier_2
+    upperBand_1 = _vwap + stDev * stDevMultiplier_1
+    lowerBand_1 = _vwap - stDev * stDevMultiplier_1
+    lowerBand_2 = _vwap - stDev * stDevMultiplier_2
+    
+    [upperBand_2, upperBand_1, lowerBand_1, lowerBand_2]
+
+// Label function from sbtnc - Daily Weekly Monthly Opens script
+f_drawLabel(_x, _y, _text, _textcolor, _style, _size) =>
+    var _label = label.new(
+     x          = _x,
+     y          = _y,
+     text       = _text,
+     textcolor  = _textcolor,
+     style      = _style,
+     size       = _size,
+     xloc       = xloc.bar_time
+     )
+    
+    label.set_xy(_label, _x, _y)
+
+// ---------- VWAP selection ---------- //
+
+src = input(hlc3, "VWAP Source")
+
+plot_vD = input(true, "Plot Daily VWAP")
+plot_vW = input(true, "Plot Weekly VWAP")
+plot_vM = input(true, "Plot Monthly VWAP")
+plot_vQ = input(true, "Plot Quarterly VWAP")
+plot_vY = input(true, "Plot Yearly VWAP")
+
+showStd = input(false, "Plot Standard Deviation")
+Std_selection = input.string(title = "Standard Deviation Option", defval="Day", options = ["Day", "Week", "Month", "Quarter", "Year"])
+
+stDevMultiplier_1 = input(1.0, "StDev mult 1")
+stDevMultiplier_2 = input(2.0, "StDev mult 2")
+showStd2 = input(true, "Show StDev Mult 2 Bands")
+
+show_labels = input(true, "Show Labels")
+fill_bands = input(false, "Fill Bands")
+
+plot_pL1 = input(false, "Plot Previous Period 1+- Levels")
+plot_pL2 = input(false, "Plot Previous Period 2+- Levels")
+
+show_plabels = input(true, "Show Previous Labels")
+fill_pbands = input(false, "Fill Previous Bands")
+
+off_mult = input(15, "Label offset")
+var DEFAULT_LABEL_SIZE      = size.small
+var DEFAULT_LABEL_STYLE     = label.style_none
+ll_offset = timenow + math.round(ta.change(time)*off_mult)
+
+// ---------- VWAP Calculations ---------- //
+
+timeChange(period) =>
+	ta.change(time(period))
+
+newSessionD = timeChange("D")
+newSessionW = timeChange("W")
+newSessionM = timeChange("M")
+newSessionQ = timeChange("3M")
+newSessionY = timeChange("12M")
+
+
+// ---------- VWAP Function Calls ---------- //
+
+[vD, stdevD] = computeVWAP(src, newSessionD)
+[vW, stdevW] = computeVWAP(src, newSessionW)
+[vM, stdevM] = computeVWAP(src, newSessionM)
+[vQ, stdevQ] = computeVWAP(src, newSessionQ)
+[vY, stdevY] = computeVWAP(src, newSessionY)
+
+
+    
+    
+// ---------- Plot VWAPs ---------- //
+
+vDplot = plot(plot_vD ? vD : na, title = "VWAP - Daily", color = color.red, style = plot.style_line, transp = 0, linewidth = 1)
+f_drawLabel(ll_offset, show_labels and plot_vD ? vD : na, "--------- vD   ", color.red, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+vWplot = plot(plot_vW ? vW : na, title = "VWAP - Weekly", color = color.white, style = plot.style_line, transp = 0, linewidth = 1)
+f_drawLabel(ll_offset, show_labels and plot_vW ? vW : na, "--------- vW   ", color.white, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+vMplot = plot(plot_vM ? vM : na, title = "VWAP - Monthly", color = color.blue, style = plot.style_line, transp = 0, linewidth = 1)
+f_drawLabel(ll_offset, show_labels and plot_vM ? vM : na, "--------- vM   ", color.blue, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+vQplot = plot(plot_vQ ? vQ : na, title = "VWAP - Quarter", color = color.green, style = plot.style_line, transp = 0, linewidth = 1)
+f_drawLabel(ll_offset, show_labels and plot_vQ ? vQ : na, "--------- vQ   ", color.green, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+vYplot = plot(plot_vY ? vY : na, title = "VWAP - Year", color = color.yellow, style = plot.style_line, transp = 0, linewidth = 1)
+f_drawLabel(ll_offset, show_labels and plot_vY ? vY : na, "--------- vY   ", color.yellow, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+
+// ---------- Standard Deviation Calc ---------- //
+
+stdev_sel = Std_selection == "Day" ? stdevD : 
+         Std_selection == "Week" ? stdevW : 
+         Std_selection == "Month" ? stdevM : 
+         Std_selection == "Quarter" ? stdevQ : 
+         Std_selection == "Year" ? stdevY : na
+
+vwap_sel = Std_selection == "Day" ? vD : 
+         Std_selection == "Week" ? vW : 
+         Std_selection == "Month" ? vM : 
+         Std_selection == "Quarter" ? vQ : 
+         Std_selection == "Year" ? vY : na
+
+prev_period = Std_selection == "Day" ? newSessionD : 
+         Std_selection == "Week" ? newSessionW : 
+         Std_selection == "Month" ? newSessionM : 
+         Std_selection == "Quarter" ? newSessionQ : 
+         Std_selection == "Year" ? newSessionY : na
+
+[s2up, s1up, s1dn, s2dn] = compute_stDEV(vwap_sel, stdev_sel, stDevMultiplier_1, stDevMultiplier_2)
+
+a = plot(showStd and showStd2 ? s2up : na, title = "VWAP - STDEV +2", color = color.red, style = plot.style_linebr, linewidth = 3, transp = 70)
+f_drawLabel(ll_offset, show_labels and showStd and showStd2 ?  s2up : na , "     -------- SD+2   ", color.red, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+b = plot(showStd ? s1up : na, title = "VWAP - STDEV +1", color = color.gray, style = plot.style_linebr, linewidth = 3, transp = 60)
+f_drawLabel(ll_offset, show_labels and showStd ?  s1up : na , "     -------- VAH   ", color.gray, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+c = plot(showStd ? s1dn : na, title = "VWAP - STDEV -1", color = color.gray, style = plot.style_linebr, linewidth = 3, transp = 60)
+f_drawLabel(ll_offset, show_labels and showStd ?  s1dn : na , "     -------- VAL   ", color.gray, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+d = plot(showStd and showStd2 ? s2dn : na, title = "VWAP - STDEV -2", color = color.blue, style = plot.style_linebr, linewidth = 3, transp = 70)
+f_drawLabel(ll_offset, show_labels and showStd and showStd2 ? s2dn : na , "     -------- SD-2   ", color.blue, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+fill_col_up = color.new(color.red, 95)
+fill_col_mid = color.new(color.gray, 90)
+fill_col_down = color.new(color.blue, 95)
+
+fill(a, b, fill_bands ? fill_col_up : na)
+fill(b, c, fill_bands ? fill_col_mid : na)
+fill(c, d, fill_bands ? fill_col_down : na)
+
+
+// ---------- Previous period levels ---------- //
+
+previouslevels(period, VWAP, s2up, s1up, s1dn, s2dn) =>
+    var float pV = na
+    var float ps2up = na
+    var float ps1up = na
+    var float ps1dn = na
+    var float ps2dn = na
+    pV := period ? VWAP[1] : pV
+    ps2up := period ? s2up[1] : ps2up
+    ps1up := period ? s1up[1] : ps1up
+    ps1dn := period ? s1dn[1] : ps1dn
+    ps2dn := period ? s2dn[1] : ps2dn
+
+    [ pV, ps2up, ps1up, ps1dn, ps2dn ]
+
+[ pV, ps2up, ps1up, ps1dn, ps2dn ] = previouslevels(prev_period, vwap_sel, s2up, s1up, s1dn, s2dn)
+
+// ---------- Plot previous levels ---------- //
+
+pVplot = plot(plot_pL1 ? pV : na, title = "Previous VWAP", color = color.orange, style = plot.style_linebr, transp = 60, linewidth = 1)
+f_drawLabel(ll_offset, show_plabels and plot_pL1 ? pV : na, "--------- pVWAP   ", color.gray, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+pa = plot(plot_pL2 and showStd2 ? ps2up : na, title = "Previous VWAP - STDEV +2", color = color.red, style = plot.style_linebr, linewidth = 1, transp = 70)
+f_drawLabel(ll_offset, show_plabels and plot_pL2 and showStd2 ?  ps2up : na , "     -------- pSD+2   ", color.red, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+pb = plot(plot_pL1 ? ps1up : na, title = "Previous VWAP - STDEV +1", color = color.gray, style = plot.style_linebr, linewidth = 1, transp = 60)
+f_drawLabel(ll_offset, show_plabels and plot_pL1 ?  ps1up : na , "     -------- pdVAH   ", color.gray, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+pc = plot(plot_pL1 ? ps1dn : na, title = "Previous VWAP - STDEV -1", color = color.gray, style = plot.style_linebr, linewidth = 1, transp = 60)
+f_drawLabel(ll_offset, show_plabels and plot_pL1 ?  ps1dn : na , "     -------- pdVAL   ", color.gray, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+pd = plot(plot_pL2 and showStd2 ? ps2dn : na, title = "Previous VWAP - STDEV -2", color = color.blue, style = plot.style_linebr, linewidth = 1, transp = 70)
+f_drawLabel(ll_offset, show_plabels and plot_pL2 and showStd2 ? ps2dn : na , "     -------- pSD-2   ", color.blue, DEFAULT_LABEL_STYLE, DEFAULT_LABEL_SIZE) 
+
+fill(pa, pb, fill_pbands ? fill_col_up : na)
+fill(pb, pc, fill_pbands ? fill_col_mid : na)
+fill(pc, pd, fill_pbands ? fill_col_down : na)
+
